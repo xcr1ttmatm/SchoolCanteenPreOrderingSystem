@@ -55,7 +55,7 @@ export default function AppShell() {
       <aside className="sidebar">
         <div className="shop-sign">
           <p className="shop-name">SPC Canteen</p>
-          <p className="shop-place">St. Paul College · Cafeteria</p>
+          <p className="shop-place">St. Peter's College · Cafeteria</p>
         </div>
 
         <nav className="nav" aria-label="Main navigation">
