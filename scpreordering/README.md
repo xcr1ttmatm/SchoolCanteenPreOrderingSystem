@@ -272,6 +272,11 @@ which is required for React Router links and Stripe return URLs to work on refre
 6. The Stripe webhook URL and secrets do **not** change — the webhook still points at
    `https://<PROJECT_REF>.supabase.co/functions/v1/stripe-webhook`.
 
+7. After each push to `main`, open **Vercel → Deployments** and confirm a new build
+   appears for that commit. GitHub should show a green **Vercel** check on the commit;
+   if it does not, check **Project Settings → Git** for the connected repo, production
+   branch `main`, and that deployments are not paused.
+
 After deploying, open `https://<your-app>.vercel.app/login` directly to confirm routing,
 then run the payment checklist below against the deployed URL.
 
