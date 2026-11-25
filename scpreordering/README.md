@@ -7,14 +7,14 @@ One canteen, no stalls. Responsive from 320px phones up to desktops.
 
 ### Existing project
 
-You already ran `01`–`08`. Open **SQL Editor** and paste and Run:
+You already ran `01`–`12`. **Do not copy, modify, or rerun script `12`** — the version
+you ran is fine. Open **SQL Editor** and paste and Run only these new scripts, in order:
 
-- `supabase/09_stripe.sql` — checkout columns, webhook deduplication, settlement RPC, and revocation of the old demo payment RPC
-- `supabase/10_completed_by.sql` — records the staff member who completed each order
-- `supabase/11_staff_order_actions.sql` — staff status undo and unpaid-order deletion
-- `supabase/12_notifications.sql` — realtime staff and customer notifications
+1. `supabase/13_cash_wait.sql` — cash window fields, 15-minute staff release RPC, and the 1-hour auto-close function
+2. `supabase/14_cash_notifications.sql` — upgrades the existing notification trigger with cash close reasons
+3. `supabase/15_cash_close_schedule.sql` — enables `pg_cron` and schedules the auto-close check every minute
 
-All are safe to re-run. Run them in order; run `09` before testing online payments.
+All three are additive and safe to re-run. Nothing from `01`–`12` needs to be run again.
 
 If you previously ran `09_paymongo.sql`, that is fine — the older `paymongo_*` columns are simply unused. The app now uses Stripe test mode.
 
@@ -34,6 +34,9 @@ Paste and Run these in order:
 10. `supabase/10_completed_by.sql` — staff member who completed each order
 11. `supabase/11_staff_order_actions.sql` — staff status undo and unpaid-order deletion
 12. `supabase/12_notifications.sql` — realtime staff and customer notifications
+13. `supabase/13_cash_wait.sql` — cash window fields, release RPC, and auto-close function
+14. `supabase/14_cash_notifications.sql` — cash-aware notification trigger upgrade
+15. `supabase/15_cash_close_schedule.sql` — `pg_cron` schedule for 1-hour auto-close
 
 **In `03_admin.sql`, change the password on the marked line before running it.**
 Admin login ID is `admin`. Then turn **Confirm email OFF** in Authentication → Settings.
@@ -184,20 +187,28 @@ are hidden; new and edited menu items are saved without them.
   be undone by staff.
 - **Delete** is available for unpaid orders from the queue row or Details and asks for
   confirmation. Paid orders cannot be deleted — sales, stock, and receipts stay intact.
+- Unpaid cash orders show their wait time. After **15 minutes**, staff can **Cancel
+  no-show** or **Release order** from the queue row or Details. Both close the unpaid
+  order and notify the customer. No stock was reserved, so released portions are
+  available for another student. Any unpaid cash order still open at **1 hour** closes
+  automatically.
 
 ## 10. Notifications
 
-A bell in the app header shows unread count and opens a short history for both canteen
-staff and customers. New notifications also appear as instant toasts. Click an item to
-mark it read, or use **Mark all read**.
+The notification bell sits at the top-right of **Incoming orders** for staff and **The
+ledger** on the student Today page. It shows unread count and opens a short history.
+New notifications also appear as instant toasts. Click an item to mark it read, or use
+**Mark all read**.
 
 - Staff receive **New order placed** when a student places an order, and **Payment
   completed** when cash is collected or an online payment is confirmed.
 - Customers receive notifications when their order is **confirmed**, **being prepared**,
-  **ready for pickup**, **completed**, **declined**, or **cancelled**.
+  **ready for pickup**, **completed**, **declined**, or **cancelled**. Cash no-show
+  release, cancellation, and 1-hour auto-close get their own clear messages.
 
 Notifications are created by database triggers, so clients cannot insert them. Realtime
-updates require `supabase/12_notifications.sql` to be run.
+updates require `supabase/12_notifications.sql`; the cash no-show messages added by
+`supabase/14_cash_notifications.sql` are optional but recommended.
 
 ## 11. Order receipts
 
@@ -285,3 +296,9 @@ End-to-end payment checklist:
 10. In two browser sessions, place an order and confirm staff see a new-order toast and badge;
     confirm the customer sees toasts for confirmed, preparing, ready, completed, declined,
     and cancelled updates.
+11. Place a cash order and confirm the customer sees the counter deadline. Before 15 minutes,
+    staff should not see the no-show actions.
+12. For a test cash order older than 15 minutes, confirm **Cancel no-show** and **Release order**
+    close it and notify the customer. Confirm another student can order the same items.
+13. For auto-close testing, set a test order's `cash_hold_until` to a minute from now in SQL
+    Editor and confirm it closes within a minute with the customer notification.

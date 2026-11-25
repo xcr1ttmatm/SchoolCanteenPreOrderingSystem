@@ -100,7 +100,7 @@ export default function AdminAccounts() {
           ) : (
             <>
               <p className="swipe-hint">Swipe sideways to see every column →</p>
-              <div className="table-scroll">
+              <div className="table-scroll" tabIndex={0} role="region" aria-label="Account book table, scroll horizontally">
                 <table className="ledger">
                   <thead>
                     <tr>
@@ -121,7 +121,7 @@ export default function AdminAccounts() {
                         <td>
                           <select
                             className="input"
-                            style={{ width: 120, minHeight: 40 }}
+                            style={{ width: 120, maxWidth: '100%', minHeight: 40 }}
                             value={person.role}
                             onChange={(event) => setRole(person, event.target.value)}
                             aria-label={`Role for ${person.full_name}`}

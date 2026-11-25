@@ -55,6 +55,14 @@ export async function deleteOrderStaff(orderId) {
   if (error) throw error
 }
 
+export async function releaseCashOrder(orderId, action) {
+  const { error } = await supabase.rpc('release_cash_order', {
+    p_order_id: orderId,
+    p_action: action,
+  })
+  if (error) throw error
+}
+
 export async function cancelOrder(orderId) {
   const { error } = await supabase.rpc('cancel_own_order', { p_order_id: orderId })
   if (error) throw error

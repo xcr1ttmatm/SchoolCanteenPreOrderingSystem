@@ -151,7 +151,7 @@ export default function StaffMenuAdmin() {
             </div>
             <div className="field">
               <label className="tiny-label" htmlFor="itemImage">Food photo (optional)</label>
-              <input id="itemImage" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
+              <input id="itemImage" className="input" type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} />
             </div>
             <p className="stat-context">
               Usual stock is used when no board is posted for today. Today's board overrides it.
@@ -167,7 +167,7 @@ export default function StaffMenuAdmin() {
         <span className="tiny-label">Everything the canteen makes</span>
         <h2 className="section-title mt-8">{items.length} items</h2>
         <p className="swipe-hint">Swipe sideways to see every column →</p>
-        <div className="table-scroll">
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="Menu table, scroll horizontally">
           <table className="ledger">
             <thead>
               <tr>

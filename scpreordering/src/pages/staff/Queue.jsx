@@ -3,12 +3,19 @@ import { Link } from 'react-router-dom'
 import { ClipboardList, Eye, RotateCcw, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ConfirmDialog, Modal } from '../../components/Modal'
+import { Notifications } from '../../components/Notifications'
 import { EmptyState, Squiggle, StatCard, StatusTag, StickyNote, ThroughputChart } from '../../components/ui'
+import {
+  cashWindow,
+  canReleaseCashOrder,
+  isOpenCashOrder,
+} from '../../lib/cashWait'
 import { firstName, greetingForHour, money, pickupLabel, statusLabel } from '../../lib/format'
 import {
   collectCash,
   declineOrder,
   deleteOrderStaff,
+  releaseCashOrder,
   setOrderStatus,
   undoDecline,
   undoStatusChange,
@@ -50,6 +57,7 @@ function DetailRow({ label, value }) {
 function OrderDetails({ order, student }) {
   const payment = order.payments?.[0]
   const items = order.order_items ?? []
+  const wait = isOpenCashOrder(order) ? cashWindow(order) : null
 
   return (
     <>
@@ -74,6 +82,15 @@ function OrderDetails({ order, student }) {
           value={order.payment_method === 'cash' ? 'Cash at canteen' : 'Online'}
         />
         <DetailRow label="Payment status" value={order.payment_status === 'paid' ? 'Paid' : 'Not paid yet'} />
+        {wait && (
+          <DetailRow
+            label="Cash pickup window"
+            value={wait.expired ? 'Expired' : `${wait.elapsedMinutes} min waiting · ${wait.remainingMinutes} min left`}
+          />
+        )}
+        {order.cash_close_reason && (
+          <DetailRow label="Cash close reason" value={order.cash_close_reason.replaceAll('_', ' ')} />
+        )}
         {payment?.verified_at && <DetailRow label="Paid at" value={fullStamp(payment.verified_at)} />}
         {order.completed_at && <DetailRow label="Completed by" value={order.completed_by_name ?? '—'} />}
         {order.completed_at && <DetailRow label="Completed at" value={fullStamp(order.completed_at)} />}
@@ -122,8 +139,10 @@ export default function StaffQueue() {
   const [busy, setBusy] = useState(null)
   const [pendingDecline, setPendingDecline] = useState(null)
   const [pendingDelete, setPendingDelete] = useState(null)
+  const [pendingCashAction, setPendingCashAction] = useState(null)
   const [detailsId, setDetailsId] = useState(null)
   const [search, setSearch] = useState('')
+  const [now, setNow] = useState(() => Date.now())
 
   const load = useCallback(async () => {
     try {
@@ -141,6 +160,11 @@ export default function StaffQueue() {
     load()
     return watchOrders(() => load())
   }, [load])
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(timer)
+  }, [])
 
   const setStatus = async (order, status) => {
     setBusy(order.id)
@@ -257,6 +281,28 @@ export default function StaffQueue() {
     }
   }
 
+  const releaseCash = async () => {
+    const target = pendingCashAction
+    if (!target) return
+
+    setBusy(target.order.id)
+    try {
+      await releaseCashOrder(target.order.id, target.action)
+      toast.success(
+        target.action === 'release'
+          ? `${target.order.order_number} released. Another student can order those portions.`
+          : `${target.order.order_number} cancelled as a no-show.`,
+      )
+      setPendingCashAction(null)
+      setDetailsId((current) => (current === target.order.id ? null : current))
+      await load()
+    } catch (error) {
+      toast.error(error.message || 'Could not close this cash order.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const detailsOrder = orders.find((order) => order.id === detailsId) ?? null
   const normalizedSearch = search.trim().toLowerCase().replace(/\s+/g, '')
   const filteredOrders = useMemo(() => {
@@ -296,8 +342,13 @@ export default function StaffQueue() {
       </div>
 
       <section className="hard-card">
-        <span className="tiny-label">Live from the app</span>
-        <h2 className="section-title mt-8">Incoming orders</h2>
+        <div className="section-head-row">
+          <div>
+            <span className="tiny-label">Live from the app</span>
+            <h2 className="section-title mt-8">Incoming orders</h2>
+          </div>
+          <Notifications />
+        </div>
         <div className="field queue-search">
           <label className="tiny-label" htmlFor="orderSearch">Find an order by Order ID</label>
           <div className="row">
@@ -330,7 +381,7 @@ export default function StaffQueue() {
               </p>
             )}
             <p className="swipe-hint">Swipe sideways to see every column →</p>
-            <div className="table-scroll">
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Order queue table, scroll horizontally">
               <table className="ledger">
                 <thead>
                   <tr>
@@ -346,6 +397,7 @@ export default function StaffQueue() {
                   {filteredOrders.map((order) => {
                     const student = profiles[order.user_id]
                     const cash = order.payment_method === 'cash'
+                    const wait = isOpenCashOrder(order) ? cashWindow(order, now) : null
                     return (
                       <tr key={order.id}>
                         <td>
@@ -353,6 +405,18 @@ export default function StaffQueue() {
                             <strong>{order.order_number}</strong>
                           </button>
                           <div className="stat-context">{cash ? 'Cash' : 'Online'}{order.payment_status === 'paid' ? ' · paid' : ''}</div>
+                          {wait && (
+                            <div
+                              className="stat-context"
+                              style={wait.manual ? { color: '#9c2a16', fontWeight: 700 } : undefined}
+                            >
+                              {wait.expired
+                                ? 'Pickup window expired'
+                                : wait.manual
+                                  ? `No-show window · ${wait.remainingMinutes} min left`
+                                  : `Waiting ${wait.elapsedMinutes} min`}
+                            </div>
+                          )}
                         </td>
                         <td>
                           {firstName(student?.full_name)}
@@ -383,9 +447,29 @@ export default function StaffQueue() {
                                 <Trash2 size={14} aria-hidden="true" />
                               </button>
                             )}
+                            {canReleaseCashOrder(order, now) && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="btn btn-quiet btn-sm"
+                                  disabled={busy === order.id}
+                                  onClick={() => setPendingCashAction({ order, action: 'cancel' })}
+                                >
+                                  Cancel no-show
+                                </button>
+                                <button
+                                  type="button"
+                                  className="btn btn-quiet btn-sm"
+                                  disabled={busy === order.id}
+                                  onClick={() => setPendingCashAction({ order, action: 'release' })}
+                                >
+                                  Release order
+                                </button>
+                              </>
+                            )}
                             {order.status === 'pending' && (
                               <>
-                                {cash && (
+                                {cash && !wait?.expired && (
                                   <button type="button" className="btn btn-quiet btn-sm" disabled={busy === order.id} onClick={() => setStatus(order, 'accepted')}>
                                     Accept
                                   </button>
@@ -396,16 +480,20 @@ export default function StaffQueue() {
                                 </button>
                               </>
                             )}
-                            {order.status === 'accepted' && (
+                            {order.status === 'accepted' && !wait?.expired && (
                               <button type="button" className="btn btn-quiet btn-sm" disabled={busy === order.id} onClick={() => setStatus(order, 'payment')}>
                                 Ask for payment
                               </button>
                             )}
                             {order.status === 'payment' && (
                               cash ? (
-                                <button type="button" className="btn btn-primary btn-sm" disabled={busy === order.id} onClick={() => takeCash(order)}>
-                                  {busy === order.id ? 'Collecting…' : 'Collect cash'}
-                                </button>
+                                wait?.expired ? (
+                                  <span className="muted" style={{ fontSize: 12 }}>Pickup window expired</span>
+                                ) : (
+                                  <button type="button" className="btn btn-primary btn-sm" disabled={busy === order.id} onClick={() => takeCash(order)}>
+                                    {busy === order.id ? 'Collecting…' : 'Collect cash'}
+                                  </button>
+                                )
                               ) : (
                                 <span className="muted" style={{ fontSize: 12 }}>Waiting for payment</span>
                               )
@@ -472,6 +560,7 @@ export default function StaffQueue() {
             'Nothing is prepared until payment is confirmed — online or cash.',
             'Open Details to see the full order before you act on it.',
             'Mistaken status change? Undo it from the queue or Details.',
+            'Unpaid cash orders can be cancelled or released after 15 minutes; they close at 1 hour.',
             'Only unpaid orders can be deleted. Paid orders stay for sales and receipts.',
           ]}
         />
@@ -497,6 +586,25 @@ export default function StaffQueue() {
         confirmLabel="Delete order"
         cancelLabel="Keep order"
         busy={Boolean(pendingDelete) && busy === pendingDelete.id}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingCashAction)}
+        onClose={() => setPendingCashAction(null)}
+        onConfirm={releaseCash}
+        title={
+          pendingCashAction?.action === 'release'
+            ? `Release ${pendingCashAction.order.order_number}?`
+            : `Cancel ${pendingCashAction?.order.order_number ?? 'order'}?`
+        }
+        message={
+          pendingCashAction?.action === 'release'
+            ? 'This closes the unpaid cash order and tells the customer it was released. No stock was consumed, so another student can order the same items.'
+            : 'This closes the unpaid cash order as a no-show and notifies the customer. No stock was consumed.'
+        }
+        confirmLabel={pendingCashAction?.action === 'release' ? 'Release order' : 'Cancel no-show'}
+        cancelLabel="Keep order"
+        busy={Boolean(pendingCashAction) && busy === pendingCashAction.order.id}
       />
 
       <Modal
@@ -534,10 +642,39 @@ export default function StaffQueue() {
                 type="button"
                 className="btn btn-quiet"
                 disabled={busy === detailsOrder.id}
-                onClick={() => setPendingDelete(detailsOrder)}
+                onClick={() => {
+                  setDetailsId(null)
+                  setPendingDelete(detailsOrder)
+                }}
               >
                 <Trash2 size={15} aria-hidden="true" /> Delete
               </button>
+            )}
+            {canReleaseCashOrder(detailsOrder, now) && (
+              <>
+                <button
+                  type="button"
+                  className="btn btn-quiet"
+                  disabled={busy === detailsOrder.id}
+                  onClick={() => {
+                    setDetailsId(null)
+                    setPendingCashAction({ order: detailsOrder, action: 'cancel' })
+                  }}
+                >
+                  Cancel no-show
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-quiet"
+                  disabled={busy === detailsOrder.id}
+                  onClick={() => {
+                    setDetailsId(null)
+                    setPendingCashAction({ order: detailsOrder, action: 'release' })
+                  }}
+                >
+                  Release order
+                </button>
+              </>
             )}
             <button type="button" className="btn btn-quiet" onClick={() => setDetailsId(null)}>
               Close

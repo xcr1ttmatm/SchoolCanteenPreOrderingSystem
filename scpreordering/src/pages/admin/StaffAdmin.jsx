@@ -103,7 +103,7 @@ export default function StaffAdmin() {
             {staff} staff, {admins} admin{admins === 1 ? '' : 's'}, {people.length - staff - admins} students.
           </p>
         </div>
-        <span className="tag sage"><UserPlus size={15} aria-hidden="true" /> Created here</span>
+        <span className="tag sage" style={{ alignSelf: 'flex-start' }}><UserPlus size={15} aria-hidden="true" /> Created here</span>
       </div>
 
       <div className="split">
@@ -176,7 +176,9 @@ export default function StaffAdmin() {
         {loading ? (
           <p className="muted">Reading the staff book…</p>
         ) : (
-          <div className="table-scroll">
+          <>
+          <p className="swipe-hint">Swipe sideways to see every column →</p>
+          <div className="table-scroll" tabIndex={0} role="region" aria-label="Roles and access table, scroll horizontally">
             <table className="ledger">
               <thead>
                 <tr>
@@ -194,7 +196,7 @@ export default function StaffAdmin() {
                     <td>
                       <select
                         className="input"
-                        style={{ width: 150, minHeight: 40 }}
+                        style={{ width: 150, maxWidth: '100%', minHeight: 40 }}
                         value={person.role}
                         onChange={(event) => setRole(person, event.target.value)}
                         aria-label={`Role for ${person.full_name}`}
@@ -216,6 +218,7 @@ export default function StaffAdmin() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </section>
     </>

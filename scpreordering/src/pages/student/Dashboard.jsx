@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
+import { Notifications } from '../../components/Notifications'
 import { EmptyState, Squiggle, StatCard, StatusTag, StickyNote, ThroughputChart } from '../../components/ui'
 import { useAuth } from '../../context/useAuth'
 import { activeStatuses, firstName, greetingForHour, money, pickupLabel } from '../../lib/format'
@@ -56,14 +57,21 @@ export default function StudentDashboard() {
       </div>
 
       <section className="hard-card">
-        <span className="tiny-label">The ledger</span>
-        <h2 className="section-title mt-8">Lately at the counter</h2>
+        <div className="section-head-row">
+          <div>
+            <span className="tiny-label">The ledger</span>
+            <h2 className="section-title mt-8">Lately at the counter</h2>
+          </div>
+          <Notifications />
+        </div>
         {loading ? (
           <p className="muted">Checking your orders…</p>
         ) : recent.length === 0 ? (
           <EmptyState title="No orders yet" hint="Your first order will show up right here." />
         ) : (
-          <div className="table-scroll">
+          <>
+          <p className="swipe-hint">Swipe sideways to see every column →</p>
+          <div className="table-scroll" tabIndex={0} role="region" aria-label="Recent orders table, scroll horizontally">
             <table className="ledger">
               <thead>
                 <tr>
@@ -85,6 +93,7 @@ export default function StudentDashboard() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </section>
 

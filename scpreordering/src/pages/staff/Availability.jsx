@@ -97,7 +97,7 @@ export default function StaffAvailability() {
         ) : (
           <>
             <p className="swipe-hint">Swipe sideways to see every column →</p>
-            <div className="table-scroll">
+            <div className="table-scroll" tabIndex={0} role="region" aria-label="Today's board table, scroll horizontally">
               <table className="ledger">
                 <thead>
                   <tr>
@@ -134,7 +134,7 @@ export default function StaffAvailability() {
                           type="number"
                           min="0"
                           className="input"
-                          style={{ width: 90, minHeight: 38 }}
+                          style={{ width: 90, maxWidth: '100%', minHeight: 38 }}
                           value={item.stock}
                           disabled={savingId === item.id}
                           onChange={(event) => setItems((current) => current.map((row) => (

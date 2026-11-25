@@ -7,9 +7,37 @@ import { Receipt } from '../../components/Receipt'
 import { EmptyState, Squiggle, StatusTag } from '../../components/ui'
 import { useAuth } from '../../context/useAuth'
 import { cancelOrder, deleteOwnOrder, startOnlinePayment } from '../../lib/checkout'
+import { cashWindow, deadlineLabel } from '../../lib/cashWait'
 import { money, pickupLabel } from '../../lib/format'
 import { fetchMyOrders, watchOrders } from '../../lib/orders'
 import { useCart } from '../../store/cartStore'
+
+function cashNotice(order, now) {
+  if (order.payment_method !== 'cash' || order.payment_status === 'paid') return null
+
+  if (order.cash_close_reason === 'released_no_show') {
+    return { tone: 'closed', text: 'Released by the canteen. The portions are available again.' }
+  }
+  if (order.cash_close_reason === 'cancelled_no_show') {
+    return { tone: 'closed', text: 'Cancelled by the canteen after the pickup wait.' }
+  }
+  if (order.cash_close_reason === 'expired') {
+    return { tone: 'closed', text: 'Closed automatically after the 1-hour pickup window.' }
+  }
+
+  const wait = cashWindow(order, now)
+  if (!wait.deadline) return null
+  if (wait.expired) {
+    return { tone: 'closed', text: 'The 1-hour pickup window has closed.' }
+  }
+  if (wait.manual) {
+    return {
+      tone: 'warning',
+      text: `Over 15 minutes old. The canteen may cancel or release this order; ${wait.remainingMinutes} min left.`,
+    }
+  }
+  return { tone: '', text: `Pay at the counter by ${deadlineLabel(wait.deadline)}.` }
+}
 
 export default function StudentOrders() {
   const { profile } = useAuth()
@@ -19,6 +47,7 @@ export default function StudentOrders() {
   const [pendingDelete, setPendingDelete] = useState(null)
   const [receiptId, setReceiptId] = useState(null)
   const [searchParams, setSearchParams] = useSearchParams()
+  const [now, setNow] = useState(() => Date.now())
   const clearCart = useCart((state) => state.clear)
 
   const load = useCallback(async () => {
@@ -35,6 +64,11 @@ export default function StudentOrders() {
     if (!profile?.id) return undefined
     return watchOrders(() => load(), `user_id=eq.${profile.id}`)
   }, [load, profile?.id])
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(timer)
+  }, [])
 
   useEffect(() => {
     const result = searchParams.get('stripe')
@@ -159,6 +193,11 @@ export default function StudentOrders() {
                 </div>
                 {order.payment_status === 'unpaid' && order.payment_session_id && (
                   <div className="stat-context">Checkout started — finish paying to continue</div>
+                )}
+                {cashNotice(order, now) && (
+                  <div className={`notice cash-wait ${cashNotice(order, now).tone}`}>
+                    {cashNotice(order, now).text}
+                  </div>
                 )}
               </div>
               <div className="row">
