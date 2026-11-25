@@ -28,12 +28,30 @@ export async function startOnlinePayment(orderId) {
     throw new Error(detail ?? 'Could not start online payment.')
   }
   const checkoutUrl = data?.checkoutUrl
-  if (!checkoutUrl) throw new Error('Stripe did not return a checkout link.')
+  if (!checkoutUrl) throw new Error('Checkout did not return a link.')
   return checkoutUrl
 }
 
 export async function collectCash(orderId) {
   const { error } = await supabase.rpc('collect_cash', { p_order_id: orderId })
+  if (error) throw error
+}
+
+export async function setOrderStatus(orderId, status) {
+  const { error } = await supabase.rpc('set_order_status', {
+    p_order_id: orderId,
+    p_status: status,
+  })
+  if (error) throw error
+}
+
+export async function undoStatusChange(orderId) {
+  const { error } = await supabase.rpc('undo_status_change', { p_order_id: orderId })
+  if (error) throw error
+}
+
+export async function deleteOrderStaff(orderId) {
+  const { error } = await supabase.rpc('delete_order_staff', { p_order_id: orderId })
   if (error) throw error
 }
 

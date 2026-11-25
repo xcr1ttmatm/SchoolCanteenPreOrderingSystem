@@ -19,7 +19,7 @@ export function Receipt({ order, onClose }) {
 
   const payment = order.payments?.[0] ?? null
   const paid = order.payment_status === 'paid'
-  const methodLabel = order.payment_method === 'cash' ? 'Cash at canteen' : 'Online (Stripe test)'
+  const methodLabel = order.payment_method === 'cash' ? 'Cash at canteen' : 'Online'
 
   return (
     <Modal

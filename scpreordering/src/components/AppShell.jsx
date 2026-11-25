@@ -12,6 +12,7 @@ import {
 } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { Notifications } from './Notifications'
 import { useAuth } from '../context/useAuth'
 
 const navByRole = {
@@ -53,9 +54,12 @@ export default function AppShell() {
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="shop-sign">
-          <p className="shop-name">SPC Canteen</p>
-          <p className="shop-place">St. Paul College · Cafeteria</p>
+        <div className="shop-sign shop-sign-row">
+          <div>
+            <p className="shop-name">SPC Canteen</p>
+            <p className="shop-place">St. Paul College · Cafeteria</p>
+          </div>
+          {(role === 'student' || role === 'staff') && <Notifications />}
         </div>
 
         <nav className="nav" aria-label="Main navigation">

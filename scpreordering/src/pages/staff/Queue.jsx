@@ -1,13 +1,19 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ClipboardList, Eye, RotateCcw } from 'lucide-react'
+import { ClipboardList, Eye, RotateCcw, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { ConfirmDialog, Modal } from '../../components/Modal'
 import { EmptyState, Squiggle, StatCard, StatusTag, StickyNote, ThroughputChart } from '../../components/ui'
 import { firstName, greetingForHour, money, pickupLabel, statusLabel } from '../../lib/format'
-import { collectCash, declineOrder, undoDecline } from '../../lib/checkout'
+import {
+  collectCash,
+  declineOrder,
+  deleteOrderStaff,
+  setOrderStatus,
+  undoDecline,
+  undoStatusChange,
+} from '../../lib/checkout'
 import { fetchAllOrders, fetchProfiles, isToday, itemSummary, watchOrders, weekCounts } from '../../lib/orders'
-import { supabase } from '../../lib/supabase'
 
 const fullStamp = (value) => {
   if (!value) return '—'
@@ -25,6 +31,12 @@ const canUndoDecline = (order) =>
   order?.status === 'rejected'
   && order?.payment_status === 'unpaid'
   && Boolean(order?.previous_status && order?.declined_by)
+
+const canUndoStatus = (order) =>
+  Boolean(order?.last_status)
+  && !canUndoDecline(order)
+  && order?.status !== 'rejected'
+  && order?.last_status !== 'rejected'
 
 function DetailRow({ label, value }) {
   return (
@@ -59,7 +71,7 @@ function OrderDetails({ order, student }) {
         <DetailRow label="Placed" value={fullStamp(order.created_at)} />
         <DetailRow
           label="Payment method"
-          value={order.payment_method === 'cash' ? 'Cash at canteen' : 'Online (Stripe test)'}
+          value={order.payment_method === 'cash' ? 'Cash at canteen' : 'Online'}
         />
         <DetailRow label="Payment status" value={order.payment_status === 'paid' ? 'Paid' : 'Not paid yet'} />
         {payment?.verified_at && <DetailRow label="Paid at" value={fullStamp(payment.verified_at)} />}
@@ -109,7 +121,9 @@ export default function StaffQueue() {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(null)
   const [pendingDecline, setPendingDecline] = useState(null)
+  const [pendingDelete, setPendingDelete] = useState(null)
   const [detailsId, setDetailsId] = useState(null)
+  const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
     try {
@@ -130,15 +144,17 @@ export default function StaffQueue() {
 
   const setStatus = async (order, status) => {
     setBusy(order.id)
-    const { error } = await supabase.from('orders').update({ status }).eq('id', order.id)
-    setBusy(null)
-    if (error) {
-      toast.error(error.message)
+    try {
+      await setOrderStatus(order.id, status)
+      toast.success(`${order.order_number} → ${statusLabel(status).toLowerCase()}`)
+      await load()
+      return true
+    } catch (error) {
+      toast.error(error.message || 'Could not update the order.')
       return false
+    } finally {
+      setBusy(null)
     }
-    toast.success(`${order.order_number} → ${statusLabel(status).toLowerCase()}`)
-    load()
-    return true
   }
 
   const takeCash = async (order) => {
@@ -154,19 +170,40 @@ export default function StaffQueue() {
     }
   }
 
-  const undo = async (order) => {
+  const runUndo = async (order, action, message) => {
     setBusy(order.id)
     try {
-      await undoDecline(order.id)
-      toast.success(`${order.order_number} restored to the queue.`)
+      await action()
+      toast.success(message)
+      setPendingDecline((current) => (current?.id === order.id ? null : current))
       setDetailsId((current) => (current === order.id ? null : current))
       await load()
     } catch (error) {
-      toast.error(error.message || 'Could not restore the order.')
+      toast.error(error.message || 'Could not undo that change.')
     } finally {
       setBusy(null)
     }
   }
+
+  const undo = async (order) => {
+    if (canUndoDecline(order)) {
+      await runUndo(
+        order,
+        () => undoDecline(order.id),
+        `${order.order_number} restored to the queue.`,
+      )
+      return
+    }
+
+    await runUndo(
+      order,
+      () => undoStatusChange(order.id),
+      `${order.order_number} returned to ${statusLabel(order.last_status).toLowerCase()}.`,
+    )
+  }
+
+  const undoDeclineFromToast = (order) =>
+    runUndo(order, () => undoDecline(order.id), `${order.order_number} restored to the queue.`)
 
   const decline = async () => {
     const order = pendingDecline
@@ -184,7 +221,7 @@ export default function StaffQueue() {
               className="toast-action"
               onClick={() => {
                 toast.dismiss(toastId)
-                undo(order)
+                undoDeclineFromToast(order)
               }}
             >
               Undo
@@ -202,7 +239,38 @@ export default function StaffQueue() {
     }
   }
 
+  const remove = async () => {
+    const order = pendingDelete
+    if (!order) return
+
+    setBusy(order.id)
+    try {
+      await deleteOrderStaff(order.id)
+      toast.success(`${order.order_number} deleted.`)
+      setPendingDelete(null)
+      setDetailsId((current) => (current === order.id ? null : current))
+      await load()
+    } catch (error) {
+      toast.error(error.message || 'Could not delete the order.')
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const detailsOrder = orders.find((order) => order.id === detailsId) ?? null
+  const normalizedSearch = search.trim().toLowerCase().replace(/\s+/g, '')
+  const filteredOrders = useMemo(() => {
+    if (!normalizedSearch) return orders
+    const needle = normalizedSearch.replace(/-/g, '')
+    return orders.filter((order) =>
+      [order.order_number, order.id].some((value) =>
+        String(value ?? '')
+          .toLowerCase()
+          .replace(/[\s-]/g, '')
+          .includes(needle),
+      ),
+    )
+  }, [orders, normalizedSearch])
   const waiting = orders.filter((order) => ['pending', 'accepted', 'payment'].includes(order.status) && order.payment_status === 'unpaid')
   const preparing = orders.filter((order) => order.status === 'preparing')
   const ready = orders.filter((order) => order.status === 'ready')
@@ -230,12 +298,37 @@ export default function StaffQueue() {
       <section className="hard-card">
         <span className="tiny-label">Live from the app</span>
         <h2 className="section-title mt-8">Incoming orders</h2>
+        <div className="field queue-search">
+          <label className="tiny-label" htmlFor="orderSearch">Find an order by Order ID</label>
+          <div className="row">
+            <input
+              id="orderSearch"
+              type="search"
+              className="input"
+              placeholder="Order number or full reference"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+            {search && (
+              <button type="button" className="btn btn-quiet btn-sm" onClick={() => setSearch('')}>
+                Clear
+              </button>
+            )}
+          </div>
+        </div>
         {loading ? (
           <p className="muted">Checking the queue…</p>
         ) : orders.length === 0 ? (
           <EmptyState title="Nothing in the queue" hint="New orders will appear here the moment students place them." />
+        ) : filteredOrders.length === 0 ? (
+          <EmptyState title="No matching orders" hint="Try the exact Order ID, or clear the search to see the whole queue." />
         ) : (
           <>
+            {search && (
+              <p className="stat-context">
+                Showing {filteredOrders.length} of {orders.length} orders.
+              </p>
+            )}
             <p className="swipe-hint">Swipe sideways to see every column →</p>
             <div className="table-scroll">
               <table className="ledger">
@@ -250,7 +343,7 @@ export default function StaffQueue() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.map((order) => {
+                  {filteredOrders.map((order) => {
                     const student = profiles[order.user_id]
                     const cash = order.payment_method === 'cash'
                     return (
@@ -259,7 +352,7 @@ export default function StaffQueue() {
                           <button type="button" className="link-button" onClick={() => setDetailsId(order.id)}>
                             <strong>{order.order_number}</strong>
                           </button>
-                          <div className="stat-context">{cash ? 'Cash' : 'Stripe test'}{order.payment_status === 'paid' ? ' · paid' : ''}</div>
+                          <div className="stat-context">{cash ? 'Cash' : 'Online'}{order.payment_status === 'paid' ? ' · paid' : ''}</div>
                         </td>
                         <td>
                           {firstName(student?.full_name)}
@@ -278,6 +371,18 @@ export default function StaffQueue() {
                             <button type="button" className="btn btn-quiet btn-sm" onClick={() => setDetailsId(order.id)}>
                               <Eye size={14} aria-hidden="true" /> Details
                             </button>
+                            {order.payment_status === 'unpaid' && (
+                              <button
+                                type="button"
+                                className="btn btn-quiet btn-sm"
+                                aria-label={`Delete ${order.order_number}`}
+                                title="Delete unpaid order"
+                                disabled={busy === order.id}
+                                onClick={() => setPendingDelete(order)}
+                              >
+                                <Trash2 size={14} aria-hidden="true" />
+                              </button>
+                            )}
                             {order.status === 'pending' && (
                               <>
                                 {cash && (
@@ -285,7 +390,7 @@ export default function StaffQueue() {
                                     Accept
                                   </button>
                                 )}
-                                {!cash && <span className="muted" style={{ fontSize: 12 }}>Awaiting Stripe payment</span>}
+                                {!cash && <span className="muted" style={{ fontSize: 12 }}>Awaiting online payment</span>}
                                 <button type="button" className="btn btn-quiet btn-sm" disabled={busy === order.id} onClick={() => setPendingDecline(order)}>
                                   Decline
                                 </button>
@@ -302,7 +407,7 @@ export default function StaffQueue() {
                                   {busy === order.id ? 'Collecting…' : 'Collect cash'}
                                 </button>
                               ) : (
-                                <span className="muted" style={{ fontSize: 12 }}>Waiting on Stripe</span>
+                                <span className="muted" style={{ fontSize: 12 }}>Waiting for payment</span>
                               )
                             )}
                             {order.status === 'preparing' && (
@@ -324,6 +429,18 @@ export default function StaffQueue() {
                               >
                                 <RotateCcw size={14} aria-hidden="true" />
                                 {busy === order.id ? 'Restoring…' : 'Undo decline'}
+                              </button>
+                            )}
+                            {canUndoStatus(order) && (
+                              <button
+                                type="button"
+                                className="btn btn-quiet btn-sm"
+                                title={`Return to ${statusLabel(order.last_status)}`}
+                                disabled={busy === order.id}
+                                onClick={() => undo(order)}
+                              >
+                                <RotateCcw size={14} aria-hidden="true" />
+                                {busy === order.id ? 'Undoing…' : 'Undo'}
                               </button>
                             )}
                             {order.status === 'completed' && <span className="muted">Done</span>}
@@ -354,7 +471,8 @@ export default function StaffQueue() {
           items={[
             'Nothing is prepared until payment is confirmed — online or cash.',
             'Open Details to see the full order before you act on it.',
-            'Mistaken decline? Undo it from the queue.',
+            'Mistaken status change? Undo it from the queue or Details.',
+            'Only unpaid orders can be deleted. Paid orders stay for sales and receipts.',
           ]}
         />
       </div>
@@ -368,6 +486,17 @@ export default function StaffQueue() {
         confirmLabel="Yes, decline order"
         cancelLabel="Keep order"
         busy={Boolean(pendingDecline) && busy === pendingDecline.id}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={remove}
+        title={`Delete ${pendingDelete?.order_number ?? 'order'}?`}
+        message="This permanently removes the unpaid order. No stock was consumed and no payment exists, so no sales record is affected."
+        confirmLabel="Delete order"
+        cancelLabel="Keep order"
+        busy={Boolean(pendingDelete) && busy === pendingDelete.id}
       />
 
       <Modal
@@ -387,6 +516,27 @@ export default function StaffQueue() {
               >
                 <RotateCcw size={15} aria-hidden="true" />
                 {busy === detailsOrder.id ? 'Restoring…' : 'Undo decline'}
+              </button>
+            )}
+            {canUndoStatus(detailsOrder) && (
+              <button
+                type="button"
+                className="btn btn-quiet"
+                disabled={busy === detailsOrder.id}
+                onClick={() => undo(detailsOrder)}
+              >
+                <RotateCcw size={15} aria-hidden="true" />
+                {busy === detailsOrder.id ? 'Undoing…' : 'Undo'}
+              </button>
+            )}
+            {detailsOrder?.payment_status === 'unpaid' && (
+              <button
+                type="button"
+                className="btn btn-quiet"
+                disabled={busy === detailsOrder.id}
+                onClick={() => setPendingDelete(detailsOrder)}
+              >
+                <Trash2 size={15} aria-hidden="true" /> Delete
               </button>
             )}
             <button type="button" className="btn btn-quiet" onClick={() => setDetailsId(null)}>

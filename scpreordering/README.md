@@ -11,8 +11,10 @@ You already ran `01`–`08`. Open **SQL Editor** and paste and Run:
 
 - `supabase/09_stripe.sql` — checkout columns, webhook deduplication, settlement RPC, and revocation of the old demo payment RPC
 - `supabase/10_completed_by.sql` — records the staff member who completed each order
+- `supabase/11_staff_order_actions.sql` — staff status undo and unpaid-order deletion
+- `supabase/12_notifications.sql` — realtime staff and customer notifications
 
-Both are safe to re-run. Run `09` before testing online payments.
+All are safe to re-run. Run them in order; run `09` before testing online payments.
 
 If you previously ran `09_paymongo.sql`, that is fine — the older `paymongo_*` columns are simply unused. The app now uses Stripe test mode.
 
@@ -30,6 +32,8 @@ Paste and Run these in order:
 8. `supabase/08_order_delete.sql` — student order deletion
 9. `supabase/09_stripe.sql` — Stripe test-mode settlement
 10. `supabase/10_completed_by.sql` — staff member who completed each order
+11. `supabase/11_staff_order_actions.sql` — staff status undo and unpaid-order deletion
+12. `supabase/12_notifications.sql` — realtime staff and customer notifications
 
 **In `03_admin.sql`, change the password on the marked line before running it.**
 Admin login ID is `admin`. Then turn **Confirm email OFF** in Authentication → Settings.
@@ -168,15 +172,34 @@ are hidden; new and edited menu items are saved without them.
 
 - Click an order number or **Details** to open the complete order: student, School ID,
   pickup time, payment method and status, notes, every item, and total.
+- Use **Find an order by Order ID** to filter the queue by friendly order number or the
+  full UUID. **Clear** restores the whole list. Counts and charts still use all orders.
 - Completed orders also show **Completed by** and **Completed at** — the staff member
   who clicked **Complete** at the counter.
 - **Decline** asks for confirmation first. **Keep order** cancels the action;
   **Yes, decline order** applies it.
-- A mistaken decline can be restored with **Undo** in the toast, the queue row, or the
-  order details modal. There is no time limit while the order stays rejected and unpaid.
-  Student cancellations cannot be undone by staff.
+- **Undo** restores the last staff status change from the queue row or Details, e.g.
+  Complete → Ready. Undoing a completion also clears the completed-by receipt fields.
+  A mistaken decline keeps its existing **Undo decline**; student cancellations cannot
+  be undone by staff.
+- **Delete** is available for unpaid orders from the queue row or Details and asks for
+  confirmation. Paid orders cannot be deleted — sales, stock, and receipts stay intact.
 
-## 10. Order receipts
+## 10. Notifications
+
+A bell in the app header shows unread count and opens a short history for both canteen
+staff and customers. New notifications also appear as instant toasts. Click an item to
+mark it read, or use **Mark all read**.
+
+- Staff receive **New order placed** when a student places an order, and **Payment
+  completed** when cash is collected or an online payment is confirmed.
+- Customers receive notifications when their order is **confirmed**, **being prepared**,
+  **ready for pickup**, **completed**, **declined**, or **cancelled**.
+
+Notifications are created by database triggers, so clients cannot insert them. Realtime
+updates require `supabase/12_notifications.sql` to be run.
+
+## 11. Order receipts
 
 Every order in **My Orders** has a **Receipt** button. The receipt is read-only and shows:
 
@@ -184,7 +207,7 @@ Every order in **My Orders** has a **Receipt** button. The receipt is read-only 
 - Order date and time
 - Ordered items and quantities, with unit and line prices
 - Total amount paid (labelled **Total due** while unpaid)
-- Payment method (cash at the canteen or online via Stripe test)
+- Payment method (cash at the canteen or online)
 - Payment status (**Paid** or **Not paid yet**, plus paid-at time when available)
 - For completed orders, **Completed by** and **Completed at** (the staff member who
   handed over the order)
@@ -192,7 +215,7 @@ Every order in **My Orders** has a **Receipt** button. The receipt is read-only 
 A receipt is only available while the order is visible in the student's list. Deleting an
 order removes its receipt too — there is no separate receipt history.
 
-## 11. Deleting orders
+## 12. Deleting orders
 
 Students can delete orders from **My Orders** after confirming.
 
@@ -201,7 +224,7 @@ Students can delete orders from **My Orders** after confirming.
   payment, and sales record for pickup and totals.
 - Staff details show “Hidden by student” for soft-deleted paid orders.
 
-## 12. Deploying to Vercel
+## 13. Deploying to Vercel
 
 The app is a static Vite build. All backend work stays in Supabase Edge Functions, so
 Vercel only hosts the frontend. `vercel.json` rewrites unknown paths to `index.html`,
@@ -241,7 +264,7 @@ which is required for React Router links and Stripe return URLs to work on refre
 After deploying, open `https://<your-app>.vercel.app/login` directly to confirm routing,
 then run the payment checklist below against the deployed URL.
 
-## 13. Verification
+## 14. Verification
 
 ```powershell
 npm.cmd run lint
@@ -256,3 +279,9 @@ End-to-end payment checklist:
 4. Cancel a checkout and confirm the basket and unpaid order remain.
 5. Place a cash order and confirm staff collection still works.
 6. Confirm a revoked account cannot start checkout.
+7. Change a staff-controlled status, then use **Undo**; confirm the previous stage returns.
+8. Try to delete a paid order (blocked), then delete an unpaid order and confirm it disappears.
+9. Search by friendly order number and by full UUID.
+10. In two browser sessions, place an order and confirm staff see a new-order toast and badge;
+    confirm the customer sees toasts for confirmed, preparing, ready, completed, declined,
+    and cancelled updates.

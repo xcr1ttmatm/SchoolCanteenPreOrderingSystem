@@ -42,7 +42,7 @@ export default function StudentOrders() {
 
     if (result === 'success') {
       clearCart()
-      toast.success('Payment submitted. Waiting for Stripe to confirm — this order will update on its own.')
+      toast.success('Payment submitted. Waiting for confirmation — this order will update on its own.')
     } else if (result === 'cancelled') {
       toast('Payment cancelled. Your basket is still here — you can pay from this list.', {
         icon: '↩',
@@ -56,10 +56,10 @@ export default function StudentOrders() {
     setBusy(order.id)
     try {
       const checkoutUrl = await startOnlinePayment(order.id)
-      toast.success('Opening the Stripe test checkout…')
+      toast.success('Opening the checkout…')
       window.location.assign(checkoutUrl)
     } catch (error) {
-      toast.error(error.message || 'Could not open the Stripe checkout.')
+      toast.error(error.message || 'Could not open checkout.')
     } finally {
       setBusy(null)
     }
@@ -118,7 +118,7 @@ export default function StudentOrders() {
           <h1 className="greeting">The running list.</h1>
           <Squiggle />
           <p className="status-line">
-            Every order you have placed, newest first. It updates on its own. Online payments use Stripe test mode — no real money moves.
+            Every order you have placed, newest first. It updates on its own. Online payments use test mode — no real money moves.
           </p>
         </div>
         <Link to="/menu" className="btn btn-primary">New order</Link>
@@ -153,12 +153,12 @@ export default function StudentOrders() {
               <div>
                 <strong className="price">Total {money(order.total)}</strong>
                 <div className="stat-context">
-                  {order.payment_method === 'cash' ? 'Cash at the canteen' : 'Online (Stripe test)'}
+                  {order.payment_method === 'cash' ? 'Cash at the canteen' : 'Online'}
                   {' · '}
                   {order.payment_status === 'paid' ? 'Paid' : 'Not paid yet'}
                 </div>
                 {order.payment_status === 'unpaid' && order.payment_session_id && (
-                  <div className="stat-context">Checkout started — finish it in Stripe</div>
+                  <div className="stat-context">Checkout started — finish paying to continue</div>
                 )}
               </div>
               <div className="row">

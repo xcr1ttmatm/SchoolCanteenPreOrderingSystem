@@ -63,7 +63,7 @@ export default function StudentCart() {
       if (method === 'online') {
         try {
           const checkoutUrl = await startOnlinePayment(orderId)
-          toast.success(`${number} placed. Opening the Stripe test checkout…`)
+          toast.success(`${number} placed. Opening the checkout…`)
           window.location.assign(checkoutUrl)
           return
         } catch (paymentError) {
@@ -165,8 +165,8 @@ export default function StudentCart() {
                 className={`method-card${method === 'online' ? ' active' : ''}`}
                 onClick={() => setMethod('online')}
               >
-                <strong>Pay online (Stripe test)</strong>
-                <span>Opens Stripe's hosted test checkout. No real money moves. Your basket stays until payment is confirmed.</span>
+                <strong>Pay online</strong>
+                <span>Opens the hosted checkout. No real money moves. Your basket stays until payment is confirmed.</span>
               </button>
               <button
                 type="button"
@@ -199,11 +199,11 @@ export default function StudentCart() {
           </div>
           <button type="submit" className="btn btn-primary mt-16" style={{ width: '100%' }} disabled={placing}>
             {placing
-              ? (method === 'online' ? 'Opening Stripe…' : 'Sending to the canteen…')
+              ? (method === 'online' ? 'Opening checkout…' : 'Sending to the canteen…')
               : (method === 'online' ? 'Place & pay online' : 'Place order')}
           </button>
           <p className="muted mt-8" style={{ fontSize: 12 }}>
-            Test mode only — no real money moves. Stock is consumed only after Stripe confirms payment, first paid, first served.
+            Test mode only — no real money moves. Stock is consumed only after payment is confirmed, first paid, first served.
           </p>
         </form>
       </div>
