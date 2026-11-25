@@ -63,6 +63,8 @@ function OrderDetails({ order, student }) {
         />
         <DetailRow label="Payment status" value={order.payment_status === 'paid' ? 'Paid' : 'Not paid yet'} />
         {payment?.verified_at && <DetailRow label="Paid at" value={fullStamp(payment.verified_at)} />}
+        {order.completed_at && <DetailRow label="Completed by" value={order.completed_by_name ?? '—'} />}
+        {order.completed_at && <DetailRow label="Completed at" value={fullStamp(order.completed_at)} />}
         {order.declined_at && <DetailRow label="Declined at" value={fullStamp(order.declined_at)} />}
         {order.undone_at && <DetailRow label="Decline undone" value={fullStamp(order.undone_at)} />}
       </div>

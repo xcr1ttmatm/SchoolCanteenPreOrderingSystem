@@ -10,8 +10,9 @@ One canteen, no stalls. Responsive from 320px phones up to desktops.
 You already ran `01`–`08`. Open **SQL Editor** and paste and Run:
 
 - `supabase/09_stripe.sql` — checkout columns, webhook deduplication, settlement RPC, and revocation of the old demo payment RPC
+- `supabase/10_completed_by.sql` — records the staff member who completed each order
 
-Safe to re-run. Run this before testing online payments.
+Both are safe to re-run. Run `09` before testing online payments.
 
 If you previously ran `09_paymongo.sql`, that is fine — the older `paymongo_*` columns are simply unused. The app now uses Stripe test mode.
 
@@ -28,6 +29,7 @@ Paste and Run these in order:
 7. `supabase/07_undo_decline.sql` — restore mistakenly declined orders
 8. `supabase/08_order_delete.sql` — student order deletion
 9. `supabase/09_stripe.sql` — Stripe test-mode settlement
+10. `supabase/10_completed_by.sql` — staff member who completed each order
 
 **In `03_admin.sql`, change the password on the marked line before running it.**
 Admin login ID is `admin`. Then turn **Confirm email OFF** in Authentication → Settings.
@@ -166,6 +168,8 @@ are hidden; new and edited menu items are saved without them.
 
 - Click an order number or **Details** to open the complete order: student, School ID,
   pickup time, payment method and status, notes, every item, and total.
+- Completed orders also show **Completed by** and **Completed at** — the staff member
+  who clicked **Complete** at the counter.
 - **Decline** asks for confirmation first. **Keep order** cancels the action;
   **Yes, decline order** applies it.
 - A mistaken decline can be restored with **Undo** in the toast, the queue row, or the
@@ -182,6 +186,8 @@ Every order in **My Orders** has a **Receipt** button. The receipt is read-only 
 - Total amount paid (labelled **Total due** while unpaid)
 - Payment method (cash at the canteen or online via Stripe test)
 - Payment status (**Paid** or **Not paid yet**, plus paid-at time when available)
+- For completed orders, **Completed by** and **Completed at** (the staff member who
+  handed over the order)
 
 A receipt is only available while the order is visible in the student's list. Deleting an
 order removes its receipt too — there is no separate receipt history.

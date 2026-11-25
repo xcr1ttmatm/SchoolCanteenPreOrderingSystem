@@ -72,6 +72,18 @@ export function Receipt({ order, onClose }) {
               <strong>{fullDate(payment.verified_at)}</strong>
             </div>
           )}
+          {order.completed_at && (
+            <>
+              <div className="detail-row">
+                <span className="muted">Completed by</span>
+                <strong>{order.completed_by_name ?? '—'}</strong>
+              </div>
+              <div className="detail-row">
+                <span className="muted">Completed at</span>
+                <strong>{fullDate(order.completed_at)}</strong>
+              </div>
+            </>
+          )}
         </div>
 
         <hr className="divider-dashed" />
