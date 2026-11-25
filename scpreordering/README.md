@@ -195,7 +195,47 @@ Students can delete orders from **My Orders** after confirming.
   payment, and sales record for pickup and totals.
 - Staff details show “Hidden by student” for soft-deleted paid orders.
 
-## 12. Verification
+## 12. Deploying to Vercel
+
+The app is a static Vite build. All backend work stays in Supabase Edge Functions, so
+Vercel only hosts the frontend. `vercel.json` rewrites unknown paths to `index.html`,
+which is required for React Router links and Stripe return URLs to work on refresh.
+
+1. Push the project to GitHub, then in Vercel choose **Add New → Project** and import it.
+2. Build settings (Vite is auto-detected):
+   - Build command: `npm run build`
+   - Output directory: `dist`
+   - Node.js version: **22.x** (Vite 8 needs Node 20.19+ or 22.12+)
+3. Add these in **Project Settings → Environment Variables**, then redeploy:
+
+   ```text
+   VITE_SUPABASE_URL=https://<PROJECT_REF>.supabase.co
+   VITE_SUPABASE_PUBLISHABLE_KEY=<publishable or anon key from Supabase API settings>
+   ```
+
+   `VITE_*` values are baked into the build, so any change requires a new deployment.
+
+4. In Supabase → **Edge Functions → Secrets**, set the checkout return URL:
+
+   ```text
+   APP_URL=https://<your-app>.vercel.app
+   ```
+
+   No trailing slash. Then redeploy `stripe-checkout` so it uses the new value. If you
+   skip this, students return to `localhost` after paying.
+
+5. In Supabase → **Authentication → URL Configuration**:
+
+   - Site URL: `https://<your-app>.vercel.app`
+   - Redirect URLs: add `https://<your-app>.vercel.app/**`
+
+6. The Stripe webhook URL and secrets do **not** change — the webhook still points at
+   `https://<PROJECT_REF>.supabase.co/functions/v1/stripe-webhook`.
+
+After deploying, open `https://<your-app>.vercel.app/login` directly to confirm routing,
+then run the payment checklist below against the deployed URL.
+
+## 13. Verification
 
 ```powershell
 npm.cmd run lint
