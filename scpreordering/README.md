@@ -1,7 +1,9 @@
 # SPC Canteen Pre-Ordering System
 
 React + Vite + Supabase. Free-tier only: Stripe **test mode** for online payments, no email API, no CLI required.
-One canteen, no stalls. Responsive from 320px phones up to desktops.
+One canteen, no stalls. Responsive from 320px phones up to desktops: phones get a
+fixed bottom navigation bar with icons above labels, while tablets and laptops keep
+the top navigation.
 
 ## 1. Supabase setup
 
@@ -13,8 +15,9 @@ you ran is fine. Open **SQL Editor** and paste and Run only these new scripts, i
 1. `supabase/13_cash_wait.sql` — cash window fields, 15-minute staff release RPC, and the 1-hour auto-close function
 2. `supabase/14_cash_notifications.sql` — upgrades the existing notification trigger with cash close reasons
 3. `supabase/15_cash_close_schedule.sql` — enables `pg_cron` and schedules the auto-close check every minute
+4. `supabase/16_canteen_status.sql` — staff-controlled open/closed counter and new-order guard
 
-All three are additive and safe to re-run. Nothing from `01`–`12` needs to be run again.
+All four are additive and safe to re-run. Nothing from `01`–`12` needs to be run again.
 
 If you previously ran `09_paymongo.sql`, that is fine — the older `paymongo_*` columns are simply unused. The app now uses Stripe test mode.
 
@@ -37,6 +40,7 @@ Paste and Run these in order:
 13. `supabase/13_cash_wait.sql` — cash window fields, release RPC, and auto-close function
 14. `supabase/14_cash_notifications.sql` — cash-aware notification trigger upgrade
 15. `supabase/15_cash_close_schedule.sql` — `pg_cron` schedule for 1-hour auto-close
+16. `supabase/16_canteen_status.sql` — counter open/closed status and new-order guard
 
 **In `03_admin.sql`, change the password on the marked line before running it.**
 Admin login ID is `admin`. Then turn **Confirm email OFF** in Authentication → Settings.
@@ -121,7 +125,8 @@ npm.cmd run dev
 - **Admin:** monitors accounts — browse students/staff, create staff accounts,
   change roles, and activate/revoke accounts. No menu, no orders, no sales.
 - **Staff:** runs the canteen — adds/edits menu items, sets usual stock and today's
-  board, collects cash, views full order details, and moves orders through the queue.
+  board, opens or closes the counter for new orders, collects cash, views full order
+  details, and moves orders through the queue.
 - **Student:** signs up with name, **School ID** (`YYYY-NNNNN`, e.g. `2023-00000`),
   and one of the six colleges. The School ID is the login ID.
 
@@ -235,7 +240,26 @@ Students can delete orders from **My Orders** after confirming.
   payment, and sales record for pickup and totals.
 - Staff details show “Hidden by student” for soft-deleted paid orders.
 
-## 13. Deploying to Vercel
+## 13. Counter open/closed
+
+On **Today's board**, staff can **Close counter** (with an optional short message
+for students) and **Reopen counter** at any time. Both actions ask for confirmation
+first. Staff and admins also see a small **Open** / **Closed** chip beside the school
+name.
+
+While closed:
+
+- Students see a banner explaining that new orders are paused, including the staff message.
+- **Add to basket** on the menu and **Place order** in the cart are disabled.
+- The database also blocks `place_order`, so a stale browser tab cannot place an order.
+- Orders already placed are unaffected — they can still be paid, collected, prepared, and completed.
+- The counter stays closed until a staff member or admin reopens it.
+
+This needs `supabase/16_canteen_status.sql` in Supabase. On phones, the navigation
+moves to a fixed bottom bar with the icon above each label; the sign-out button and
+status chip stay in the compact top bar.
+
+## 14. Deploying to Vercel
 
 The app is a static Vite build. All backend work stays in Supabase Edge Functions, so
 Vercel only hosts the frontend. `vercel.json` rewrites unknown paths to `index.html`,
@@ -280,7 +304,7 @@ which is required for React Router links and Stripe return URLs to work on refre
 After deploying, open `https://<your-app>.vercel.app/login` directly to confirm routing,
 then run the payment checklist below against the deployed URL.
 
-## 14. Verification
+## 15. Verification
 
 ```powershell
 npm.cmd run lint
@@ -307,3 +331,9 @@ End-to-end payment checklist:
     close it and notify the customer. Confirm another student can order the same items.
 13. For auto-close testing, set a test order's `cash_hold_until` to a minute from now in SQL
     Editor and confirm it closes within a minute with the customer notification.
+14. Close the counter on **Today's board** and confirm students see the banner, the menu/cart
+    buttons disable, and the staff/admin chip changes to **Closed**.
+15. Confirm an order placed before closing can still be paid and moved through the staff queue.
+16. Reopen the counter and confirm students can order again without refreshing.
+17. At a 320px phone width, confirm the bottom bar shows icons above labels, page content is
+    not hidden behind it, and notifications and toasts appear above the bar.

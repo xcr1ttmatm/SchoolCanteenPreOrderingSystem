@@ -12,7 +12,10 @@ import {
 } from 'lucide-react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import CanteenStatusProvider from '../context/CanteenStatusProvider'
 import { useAuth } from '../context/useAuth'
+import CanteenStatusBanner from './CanteenStatusBanner'
+import CanteenStatusChip from './CanteenStatusChip'
 
 const navByRole = {
   student: [
@@ -51,42 +54,46 @@ export default function AppShell() {
   }
 
   return (
-    <div className="app-shell">
-      <aside className="sidebar">
-        <div className="shop-sign">
-          <p className="shop-name">SPC Canteen</p>
-          <p className="shop-place">St. Peter's College · Cafeteria</p>
-        </div>
+    <CanteenStatusProvider>
+      <div className="app-shell">
+        <aside className="sidebar">
+          <div className="shop-sign">
+            <p className="shop-name">SPC Canteen</p>
+            <p className="shop-place">St. Peter's College · Cafeteria</p>
+            {(role === 'staff' || role === 'admin') && <CanteenStatusChip />}
+          </div>
 
-        <nav className="nav" aria-label="Main navigation">
-          {items.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-            >
-              <Icon size={18} aria-hidden="true" />
-              <span>{label}</span>
-            </NavLink>
-          ))}
-        </nav>
+          <nav className="nav" aria-label="Main navigation">
+            {items.map(({ to, label, icon: Icon }) => (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/'}
+                className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+              >
+                <Icon size={18} aria-hidden="true" />
+                <span>{label}</span>
+              </NavLink>
+            ))}
+          </nav>
 
-        <div className="nav-spacer" />
+          <div className="nav-spacer" />
 
-        <div className="sidebar-foot">
-          <p className="tiny-label">Signed in as</p>
-          <p className="mt-8">{profile?.full_name || 'Canteen user'}</p>
-          <p className="muted">{profile?.student_id || role}</p>
-          <button type="button" className="btn btn-quiet btn-sm mt-16" onClick={handleSignOut}>
-            <LogOut size={15} aria-hidden="true" /> Sign out
-          </button>
-        </div>
-      </aside>
+          <div className="sidebar-foot">
+            <p className="tiny-label">Signed in as</p>
+            <p className="mt-8">{profile?.full_name || 'Canteen user'}</p>
+            <p className="muted">{profile?.student_id || role}</p>
+            <button type="button" className="btn btn-quiet btn-sm mt-16" onClick={handleSignOut}>
+              <LogOut size={15} aria-hidden="true" /> Sign out
+            </button>
+          </div>
+        </aside>
 
-      <main className="main">
-        <Outlet />
-      </main>
-    </div>
+        <main className="main">
+          {role === 'student' && <CanteenStatusBanner />}
+          <Outlet />
+        </main>
+      </div>
+    </CanteenStatusProvider>
   )
 }

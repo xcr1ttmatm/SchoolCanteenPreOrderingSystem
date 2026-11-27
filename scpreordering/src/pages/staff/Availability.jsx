@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { LockKeyhole, UnlockKeyhole } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { ConfirmDialog } from '../../components/Modal'
 import { Squiggle } from '../../components/ui'
 import { useAuth } from '../../context/useAuth'
+import { useCanteenStatus } from '../../context/useCanteenStatus'
 import { money } from '../../lib/format'
 import { fetchTodayMenu, resetTodayMenu, saveDailyEntry } from '../../lib/menu'
 
@@ -12,6 +15,10 @@ export default function StaffAvailability() {
   const [hasBoard, setHasBoard] = useState(false)
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState(null)
+  const [confirmStatus, setConfirmStatus] = useState(false)
+  const [closingReason, setClosingReason] = useState('')
+  const [savingStatus, setSavingStatus] = useState(false)
+  const { isOpen, reason, loading: statusLoading, error: statusError, changeStatus } = useCanteenStatus()
   const today = new Date().toLocaleDateString(undefined, {
     weekday: 'long', month: 'short', day: 'numeric',
   })
@@ -58,6 +65,24 @@ export default function StaffAvailability() {
     }
   }
 
+  const applyStatusChange = async () => {
+    setSavingStatus(true)
+    try {
+      await changeStatus(!isOpen, isOpen ? closingReason : null)
+      toast.success(
+        isOpen
+          ? 'Counter closed. New orders are paused.'
+          : 'Counter open. Students can order again.',
+      )
+      setConfirmStatus(false)
+      setClosingReason('')
+    } catch (error) {
+      toast.error(error.message || 'Could not update the counter status.')
+    } finally {
+      setSavingStatus(false)
+    }
+  }
+
   return (
     <>
       <div className="page-head">
@@ -82,6 +107,69 @@ export default function StaffAvailability() {
           No board posted yet for today. Students are seeing the usual menu until you change something below.
         </div>
       )}
+
+      <section className="hard-card canteen-control">
+        <div className="row between">
+          <div>
+            <span className="tiny-label">Counter status</span>
+            <h2 className="section-title mt-8">Taking new orders?</h2>
+            <p className="stat-context">
+              Closing pauses new orders. Orders already placed can still be paid and processed.
+            </p>
+          </div>
+          <span className={`tag ${isOpen ? 'sage' : 'tomato'}`}>
+            {isOpen ? 'Open' : 'Closed'}
+          </span>
+        </div>
+
+        {statusError && (
+          <p className="error-text mt-16">
+            {statusError} Run the latest counter-status SQL script in Supabase to enable this control.
+          </p>
+        )}
+
+        {isOpen ? (
+          <div className="field mt-16">
+            <label className="tiny-label" htmlFor="closedReason">Message for students (optional)</label>
+            <input
+              id="closedReason"
+              className="input"
+              value={closingReason}
+              maxLength={160}
+              placeholder="e.g. Out for lunch, back at 1:00"
+              onChange={(event) => setClosingReason(event.target.value)}
+            />
+          </div>
+        ) : (
+          reason && <p className="notice mt-16">Students see: “{reason}”</p>
+        )}
+
+        <button
+          type="button"
+          className={`btn ${isOpen ? 'btn-quiet' : 'btn-primary'} mt-16`}
+          disabled={statusLoading || Boolean(statusError)}
+          onClick={() => setConfirmStatus(true)}
+        >
+          {isOpen
+            ? <><LockKeyhole size={16} aria-hidden="true" /> Close counter</>
+            : <><UnlockKeyhole size={16} aria-hidden="true" /> Reopen counter</>}
+        </button>
+
+        <ConfirmDialog
+          open={confirmStatus}
+          onClose={() => { if (!savingStatus) setConfirmStatus(false) }}
+          onConfirm={applyStatusChange}
+          title={isOpen ? 'Close the counter?' : 'Reopen the counter?'}
+          message={
+            isOpen
+              ? 'Students will see a closed banner and the order buttons will be disabled. Orders already placed can still be paid and prepared. You can reopen at any time.'
+              : 'Students will be able to browse and place new orders again right away.'
+          }
+          confirmLabel={isOpen ? 'Yes, close counter' : 'Yes, reopen counter'}
+          cancelLabel={isOpen ? 'Keep it open' : 'Keep it closed'}
+          busy={savingStatus}
+        />
+      </section>
 
       <section className="hard-card">
         <div className="row between">

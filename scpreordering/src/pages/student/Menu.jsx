@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ShoppingBasket } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { useCanteenStatus } from '../../context/useCanteenStatus'
 import { fetchTodayMenu, watchMenu } from '../../lib/menu'
 import { money } from '../../lib/format'
 import { useCart } from '../../store/cartStore'
@@ -13,6 +14,7 @@ export default function StudentMenu() {
   const [loading, setLoading] = useState(true)
   const count = useCart((state) => state.count())
   const add = useCart((state) => state.add)
+  const { isOpen } = useCanteenStatus()
 
   useEffect(() => {
     let mounted = true
@@ -41,6 +43,10 @@ export default function StudentMenu() {
   const visible = category === 'All' ? items : items.filter((item) => item.category === category)
 
   const handleAdd = (item) => {
+    if (!isOpen) {
+      toast.error('The counter is closed. New baskets are paused until staff reopen it.')
+      return
+    }
     if (!item.available || item.stock <= 0) return
     add(item)
     toast.success(`${item.name} added to your basket`)
@@ -111,10 +117,10 @@ export default function StudentMenu() {
                   type="button"
                   className="btn btn-quiet btn-sm mt-16"
                   style={{ width: '100%', boxShadow: '3px 3px 0 #1F2A24' }}
-                  disabled={soldOut}
+                  disabled={soldOut || !isOpen}
                   onClick={() => handleAdd(item)}
                 >
-                  {soldOut ? 'Not today' : 'Add to basket'}
+                  {!isOpen ? 'Counter closed' : soldOut ? 'Not today' : 'Add to basket'}
                 </button>
               </article>
             )

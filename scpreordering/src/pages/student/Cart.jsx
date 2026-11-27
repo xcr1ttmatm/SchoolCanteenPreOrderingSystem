@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
+import { useCanteenStatus } from '../../context/useCanteenStatus'
 import { EmptyState } from '../../components/ui'
 import { fetchOrderNumber, placeOrder, startOnlinePayment } from '../../lib/checkout'
 import { money } from '../../lib/format'
@@ -20,6 +21,7 @@ export default function StudentCart() {
   const [notes, setNotes] = useState('')
   const [method, setMethod] = useState('online')
   const [placing, setPlacing] = useState(false)
+  const { isOpen } = useCanteenStatus()
 
   const checkFreshStock = async () => {
     const { items: live } = await fetchTodayMenu()
@@ -36,6 +38,10 @@ export default function StudentCart() {
 
   const place = async (event) => {
     event.preventDefault()
+    if (!isOpen) {
+      toast.error('The counter is closed. Your basket is saved until staff reopen it.')
+      return
+    }
     if (!items.length) {
       toast.error('Your basket is empty.')
       return
@@ -197,11 +203,18 @@ export default function StudentCart() {
             <span className="tiny-label">Total</span>
             <span className="price">{money(total)}</span>
           </div>
-          <button type="submit" className="btn btn-primary mt-16" style={{ width: '100%' }} disabled={placing}>
-            {placing
-              ? (method === 'online' ? 'Opening checkout…' : 'Sending to the canteen…')
-              : (method === 'online' ? 'Place & pay online' : 'Place order')}
+          <button type="submit" className="btn btn-primary mt-16" style={{ width: '100%' }} disabled={placing || !isOpen}>
+            {!isOpen
+              ? 'Counter closed'
+              : placing
+                ? (method === 'online' ? 'Opening checkout…' : 'Sending to the canteen…')
+                : (method === 'online' ? 'Place & pay online' : 'Place order')}
           </button>
+          {!isOpen && (
+            <p className="error-text mt-8" style={{ fontSize: 12 }}>
+              New orders are paused while the counter is closed. Nothing in your basket was lost.
+            </p>
+          )}
           <p className="muted mt-8" style={{ fontSize: 12 }}>
             Test mode only — no real money moves. Stock is consumed only after payment is confirmed, first paid, first served.
           </p>
